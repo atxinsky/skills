@@ -290,7 +290,8 @@ description: 深度研究分析skill，用于股票、加密货币和商品期�
 文件写入完成后，立即执行以下命令上传：
 
 ```bash
-python "C:\Users\atxin\.claude\skills\notion-save-skill\scripts\save_to_notion.py" --api-key "YOUR_NOTION_API_KEY" --title "【研究】{标的} - {日期}" --file "C:\Users\atxin\temp_research_report.md"
+# 使用 NOTION_API_KEY 环境变量，无需 --api-key 参数
+python "C:\Users\atxin\.claude\skills\notion-save-skill\scripts\save_to_notion.py" --title "【研究】{标的} - {日期}" --file "C:\Users\atxin\temp_research_report.md"
 ```
 
 ### 步骤3：清理

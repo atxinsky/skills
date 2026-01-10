@@ -1,0 +1,3 @@
+.env
+env.ps1
+*.backup*
