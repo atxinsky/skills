@@ -67,8 +67,10 @@ description: "快捷公众号发布命令。输入 /vchat 即可启动从选题�
 **发布目录**：`D:\Obsidian_AI_WeChat_Kit\公众号发布区`
 
 **微信公众号**：
-- AppID: wxf2f1ac4b86085ef8
 - 公众号名称：新资产通证研究
+- AppID：环境变量 `WECHAT_APP_ID`
+- AppSecret：环境变量 `WECHAT_APP_SECRET`
+- 获取access_token：`curl -s "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%WECHAT_APP_ID%&secret=%WECHAT_APP_SECRET%"`
 
 ---
 
@@ -270,7 +272,7 @@ description: "快捷公众号发布命令。输入 /vchat 即可启动从选题�
 ## ⚠️ 注意事项
 
 1. **首次使用**：
-   - 配置环境变量（AppID/AppSecret）
+   - 确保环境变量已设置：`WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`
    - 🆕 NotebookLM 认证：`notebooklm login`
 2. **IP白名单**：需要在公众号后台添加当前IP
 3. **封面生成**：
