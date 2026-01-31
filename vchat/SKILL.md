@@ -31,6 +31,7 @@ description: "快捷公众号发布命令。输入 /vchat 即可启动从选题�
 5. 质量评分
 6. 生成封面
 7. 发布草稿
+8. 同步到Notion公众号数据库
 
 ---
 
@@ -45,6 +46,7 @@ description: "快捷公众号发布命令。输入 /vchat 即可启动从选题�
 2. 质量评分
 3. 生成封面
 4. 发布草稿
+5. 同步到Notion公众号数据库
 
 ---
 
@@ -100,11 +102,23 @@ description: "快捷公众号发布命令。输入 /vchat 即可启动从选题�
 - `article-scorer` - 质量评分
 - `wechat-draft (NotebookLM)` - 🆕 **AI封面生成 + 发布草稿**
 
-### 3. 统一输出
+### 3. 同步到Notion（公众号专属数据库）
+
+发布完成后，自动将文章同步到Notion公众号数据库。**与 notion-save-skill 完全独立，互不干扰。**
+
+- **数据库ID**：`2f9cc7dd34048073b096da5576c8bc9d`
+- **使用工具**：Notion MCP（`mcp__claude_ai_Notion__notion-create-pages`）
+- **写入字段**：
+  - `Name`（标题）：文章标题
+  - 页面正文：文章完整内容（Markdown格式）
+- **失败不阻塞**：如果Notion同步失败，不影响公众号发布流程，仅提示警告
+
+### 4. 统一输出
 
 - 文章保存到：`D:\Obsidian_AI_WeChat_Kit\公众号发布区\`
 - 封面保存到：同目录
 - 返回草稿链接
+- 返回Notion页面链接
 
 ---
 
@@ -142,11 +156,15 @@ description: "快捷公众号发布命令。输入 /vchat 即可启动从选题�
 📤 发布草稿...
 ✅ 发布成功！
 
+📝 同步到Notion...
+✅ 已保存到公众号数据库
+
 📁 文件保存：
 - 文章：D:\Obsidian_AI_WeChat_Kit\公众号发布区\全球稳定币监管大洗牌.md
 - 封面：D:\Obsidian_AI_WeChat_Kit\公众号发布区\封面-全球稳定币监管.png
 
 🔗 草稿链接：https://mp.weixin.qq.com/...
+📝 Notion：https://notion.so/...
 ```
 
 ---
@@ -175,7 +193,11 @@ description: "快捷公众号发布命令。输入 /vchat 即可启动从选题�
 📤 发布草稿...
 ✅ 发布成功！
 
+📝 同步到Notion...
+✅ 已保存到公众号数据库
+
 🔗 草稿链接：https://mp.weixin.qq.com/...
+📝 Notion：https://notion.so/...
 ```
 
 ---
