@@ -2,48 +2,41 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
-const marked = require('marked');
+const { marked } = require('marked');
+
+// 默认凭证
+const DEFAULT_APP_ID = 'wxf2f1ac4b86085ef8';
+const DEFAULT_APP_SECRET = '6657698519d94c3b3d224cc9a2c354ba';
 
 class WechatPublisher {
   constructor(appId, appSecret) {
-    this.appId = appId;
-    this.appSecret = appSecret;
+    this.appId = appId || DEFAULT_APP_ID;
+    this.appSecret = appSecret || DEFAULT_APP_SECRET;
     this.accessToken = null;
     this.tokenExpireTime = 0;
   }
 
-  /**
-   * 获取 access_token
-   */
   async getAccessToken() {
     const now = Date.now();
-
-    // Token有效期内，直接返回
     if (this.accessToken && now < this.tokenExpireTime) {
       return this.accessToken;
     }
 
     const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${this.appId}&secret=${this.appSecret}`;
-
     const response = await axios.get(url);
 
     if (response.data.errcode) {
-      throw new Error(`获取access_token失败: ${response.data.errmsg}`);
+      throw new Error(`获取access_token失败: ${response.data.errmsg} (code: ${response.data.errcode})`);
     }
 
     this.accessToken = response.data.access_token;
-    // 提前5分钟过期
     this.tokenExpireTime = now + (response.data.expires_in - 300) * 1000;
-
     return this.accessToken;
   }
 
-  /**
-   * 上传图片到公众号素材库（永久素材）
-   */
   async uploadImage(imagePath) {
     const token = await this.getAccessToken();
-    const url = `https://api.weixin.qq.com/cgi-bin/material/add_material?access_token=${token}&type=image`;
+    const url = `https://api.weixin.qq.com/cgi-bin/media/upload?access_token=${token}&type=image`;
 
     const form = new FormData();
     form.append('media', fs.createReadStream(imagePath));
@@ -59,280 +52,213 @@ class WechatPublisher {
     return response.data.media_id;
   }
 
-  /**
-   * Markdown → 公众号HTML转换
-   */
-  markdownToWechatHTML(markdown, mediaIds = {}) {
-    // 配置marked
-    marked.setOptions({
-      breaks: true,
-      gfm: true,
-    });
-
-    let html = marked.parse(markdown);
-
-    // 替换图片路径为media_id
-    Object.keys(mediaIds).forEach((imagePath) => {
-      const mediaId = mediaIds[imagePath];
-      const imgTag = `<img src="https://mmbiz.qpic.cn/mmbiz_png/${mediaId}/0?wx_fmt=png" />`;
-      html = html.replace(new RegExp(`<img.*?src="${imagePath}".*?>`, 'g'), imgTag);
-    });
-
-    // 美化代码块
-    html = html.replace(
-      /<pre><code class="language-(\w+)">(.*?)<\/code><\/pre>/gs,
-      (match, lang, code) => {
-        return `
-          <section style="background: #f6f8fa; border-radius: 4px; padding: 16px; margin: 16px 0; overflow-x: auto;">
-            <p style="margin: 0; font-size: 12px; color: #586069; margin-bottom: 8px;">语言: ${lang}</p>
-            <pre style="margin: 0; font-family: 'Courier New', monospace; font-size: 14px; line-height: 1.5; color: #24292e; white-space: pre-wrap; word-wrap: break-word;">${code}</pre>
-          </section>
-        `;
-      }
-    );
-
-    // 美化引用块
-    html = html.replace(
-      /<blockquote>(.*?)<\/blockquote>/gs,
-      (match, content) => {
-        return `
-          <section style="border-left: 4px solid #1890ff; background: #f0f7ff; padding: 12px 16px; margin: 16px 0;">
-            ${content}
-          </section>
-        `;
-      }
-    );
-
-    // 美化标题
-    html = html.replace(/<h2>(.*?)<\/h2>/g, '<h2 style="font-size: 20px; font-weight: bold; margin: 24px 0 12px; color: #1a1a1a; border-bottom: 2px solid #1890ff; padding-bottom: 8px;">$1</h2>');
-    html = html.replace(/<h3>(.*?)<\/h3>/g, '<h3 style="font-size: 18px; font-weight: bold; margin: 20px 0 10px; color: #333;">$1</h3>');
-
-    // 美化段落
-    html = html.replace(/<p>(.*?)<\/p>/g, '<p style="font-size: 16px; line-height: 1.8; margin: 12px 0; color: #333;">$1</p>');
-
-    // 美化表格
-    html = html.replace(/<table>/g, '<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">');
-    html = html.replace(/<th>/g, '<th style="border: 1px solid #ddd; padding: 12px; background: #f5f5f5; font-weight: bold;">');
-    html = html.replace(/<td>/g, '<td style="border: 1px solid #ddd; padding: 12px;">');
-
-    return html;
-  }
-
-  /**
-   * 提取Markdown中的图片路径
-   */
-  extractImages(markdown) {
-    const imgRegex = /!\[.*?\]\((.*?)\)/g;
-    const images = [];
-    let match;
-
-    while ((match = imgRegex.exec(markdown)) !== null) {
-      images.push(match[1]);
-    }
-
-    return images;
-  }
-
-  /**
-   * 提取文章标题
-   */
-  extractTitle(markdown) {
-    const titleMatch = markdown.match(/^#\s+(.+)$/m);
-    return titleMatch ? titleMatch[1] : '未命名文章';
-  }
-
-  /**
-   * 创建草稿
-   */
-  async createDraft(title, content, thumbMediaId) {
+  // 上传永久素材（用于封面图）
+  async uploadThumbImage(imagePath) {
     const token = await this.getAccessToken();
-    const url = `https://api.weixin.qq.com/cgi-bin/draft/add?access_token=${token}`;
+    const url = `https://api.weixin.qq.com/cgi-bin/material/add_material?access_token=${token}&type=image`;
 
-    const data = {
-      articles: [
-        {
-          title: title,
-          author: '',
-          digest: '',
-          content: content,
-          content_source_url: '',
-          thumb_media_id: thumbMediaId,
-          need_open_comment: 0,
-          only_fans_can_comment: 0,
-        },
-      ],
-    };
+    const form = new FormData();
+    form.append('media', fs.createReadStream(imagePath));
 
-    const response = await axios.post(url, data);
+    const response = await axios.post(url, form, {
+      headers: form.getHeaders(),
+    });
 
-    if (response.data.errcode && response.data.errcode !== 0) {
-      throw new Error(`创建草稿失败: ${response.data.errmsg}`);
+    if (response.data.errcode) {
+      throw new Error(`封面图上传失败: ${response.data.errmsg}`);
     }
 
     return response.data.media_id;
   }
 
-  /**
-   * 使用 Google AI 生成封面图（纯 AI，不使用 Canvas）
-   *
-   * 注意：目前 Google 的免费图片生成 API 有限制：
-   * - Imagen 4: 需要付费账户
-   * - Gemini 2.0 Flash: 不支持图片生成
-   *
-   * 如果 API 不可用，返回 null（不生成封面）
-   */
-  async generateCoverWithAI(markdownPath, title, outputDir) {
-    const apiKey = process.env.GOOGLE_AI_API_KEY;
-    if (!apiKey) {
-      console.warn('⚠️ GOOGLE_AI_API_KEY 未设置，跳过封面生成');
-      return null;
+  // 上传文章内图片（返回URL）
+  async uploadContentImage(imagePath) {
+    const token = await this.getAccessToken();
+    const url = `https://api.weixin.qq.com/cgi-bin/media/uploadimg?access_token=${token}`;
+
+    const form = new FormData();
+    form.append('media', fs.createReadStream(imagePath));
+
+    const response = await axios.post(url, form, {
+      headers: form.getHeaders(),
+    });
+
+    if (response.data.errcode) {
+      throw new Error(`内容图片上传失败: ${response.data.errmsg}`);
     }
 
-    console.log('⚠️ Google AI 图片生成需要付费账户，跳过封面生成');
-    console.log('💡 建议：手动提供封面图，或不使用封面');
-    return null;
-
-    // 未来如果有可用的免费图片生成 API，可以在这里实现
+    return response.data.url;
   }
 
-  /**
-   * 主流程：发布文章到草稿箱
-   */
-  async publishToDraft(markdownPath, coverImagePath = null, options = {}) {
-    const { useNotebookLM = true } = options;
+  markdownToWechatHTML(markdown) {
+    marked.setOptions({ breaks: true, gfm: true });
+
+    let html = marked.parse(markdown);
+
+    // 去掉最外层 h1（已作为标题）
+    html = html.replace(/<h1[^>]*>.*?<\/h1>/i, '');
+
+    // 美化 h2
+    html = html.replace(/<h2>(.*?)<\/h2>/g,
+      '<h2 style="font-size:20px;font-weight:bold;margin:28px 0 14px;color:#1a1a1a;border-left:4px solid #1890ff;padding-left:12px;line-height:1.4;">$1</h2>');
+
+    // 美化 h3
+    html = html.replace(/<h3>(.*?)<\/h3>/g,
+      '<h3 style="font-size:17px;font-weight:bold;margin:22px 0 10px;color:#333;line-height:1.4;">$1</h3>');
+
+    // 美化段落
+    html = html.replace(/<p>(.*?)<\/p>/gs,
+      '<p style="font-size:16px;line-height:2;margin:12px 0;color:#333;letter-spacing:0.5px;">$1</p>');
+
+    // 美化引用块
+    html = html.replace(/<blockquote>([\s\S]*?)<\/blockquote>/g,
+      '<blockquote style="border-left:4px solid #1890ff;background:#f0f7ff;padding:14px 18px;margin:16px 0;color:#555;font-size:15px;line-height:1.8;">$1</blockquote>');
+
+    // 美化代码块
+    html = html.replace(/<pre><code(?:\s+class="language-(\w+)")?>([\s\S]*?)<\/code><\/pre>/g,
+      (match, lang, code) => {
+        return `<section style="background:#282c34;border-radius:8px;padding:16px 20px;margin:16px 0;overflow-x:auto;">
+          <pre style="margin:0;font-family:'Courier New',monospace;font-size:13px;line-height:1.6;color:#abb2bf;white-space:pre-wrap;word-wrap:break-word;">${code}</pre>
+        </section>`;
+      });
+
+    // 美化行内代码
+    html = html.replace(/<code>(.*?)<\/code>/g,
+      '<code style="background:#f6f8fa;padding:2px 6px;border-radius:3px;font-size:14px;color:#e83e8c;">$1</code>');
+
+    // 美化粗体
+    html = html.replace(/<strong>(.*?)<\/strong>/g,
+      '<strong style="color:#1a1a1a;">$1</strong>');
+
+    // 美化分割线
+    html = html.replace(/<hr\s*\/?>/g,
+      '<hr style="border:none;border-top:1px dashed #ddd;margin:24px 0;" />');
+
+    // 美化列表
+    html = html.replace(/<ul>/g, '<ul style="padding-left:20px;margin:12px 0;">');
+    html = html.replace(/<li>(.*?)<\/li>/g,
+      '<li style="font-size:16px;line-height:2;color:#333;margin:4px 0;">$1</li>');
+
+    return html;
+  }
+
+  extractTitle(markdown) {
+    const titleMatch = markdown.match(/^#\s+(.+)$/m);
+    return titleMatch ? titleMatch[1] : '未命名文章';
+  }
+
+  extractDigest(markdown) {
+    // 取第一个 blockquote 或前200字作为摘要
+    const quoteMatch = markdown.match(/^>\s+(.+)$/m);
+    if (quoteMatch) return quoteMatch[1].slice(0, 120);
+    const text = markdown.replace(/[#*>\-`\[\]()!|]/g, '').replace(/\n/g, ' ').trim();
+    return text.slice(0, 120);
+  }
+
+  async createDraft(title, content, thumbMediaId, digest) {
+    const token = await this.getAccessToken();
+    const url = `https://api.weixin.qq.com/cgi-bin/draft/add?access_token=${token}`;
+
+    const article = {
+      title: title,
+      author: '新资产通证研究',
+      digest: digest || '',
+      content: content,
+      content_source_url: '',
+      need_open_comment: 0,
+      only_fans_can_comment: 0,
+    };
+
+    if (thumbMediaId) {
+      article.thumb_media_id = thumbMediaId;
+    }
+
+    const data = { articles: [article] };
+    const response = await axios.post(url, data);
+
+    if (response.data.errcode && response.data.errcode !== 0) {
+      throw new Error(`创建草稿失败: ${response.data.errmsg} (code: ${response.data.errcode})`);
+    }
+
+    return response.data.media_id;
+  }
+
+  async publishToDraft(markdownPath, coverImagePath = null) {
     console.log('📖 读取文章...');
     const markdown = fs.readFileSync(markdownPath, 'utf-8');
 
-    console.log('📝 提取标题...');
+    console.log('📝 提取标题和摘要...');
     const title = this.extractTitle(markdown);
+    const digest = this.extractDigest(markdown);
+    console.log(`  标题: ${title}`);
+    console.log(`  摘要: ${digest}`);
 
-    console.log('🖼️ 提取图片...');
-    const imagePaths = this.extractImages(markdown);
-
-    // 生成或添加封面图
-    if (!coverImagePath && useNotebookLM) {
-      console.log('🎨 尝试 AI 封面生成...');
-      const outputDir = path.dirname(markdownPath);
-      const generatedCover = await this.generateCoverWithAI(
-        markdownPath,
-        title,
-        outputDir
-      );
-
-      if (generatedCover) {
-        coverImagePath = generatedCover;
-        console.log('✅ AI 封面生成成功:', generatedCover);
-      } else {
-        console.log('ℹ️ 继续发布（无封面）');
-      }
-    }
-
-    // 添加封面图到图片列表
-    if (coverImagePath && !imagePaths.includes(coverImagePath)) {
-      imagePaths.unshift(coverImagePath);
-    }
-
-    console.log(`📤 上传图片 (${imagePaths.length}张)...`);
-    const mediaIds = {};
+    // 上传封面图（如果有）
     let thumbMediaId = null;
+    if (coverImagePath && fs.existsSync(coverImagePath)) {
+      console.log('🖼️ 上传封面图...');
+      thumbMediaId = await this.uploadThumbImage(coverImagePath);
+      console.log(`  封面 media_id: ${thumbMediaId}`);
+    }
 
-    for (let i = 0; i < imagePaths.length; i++) {
-      const imagePath = imagePaths[i];
-      console.log(`  [${i + 1}/${imagePaths.length}] ${imagePath}`);
-
-      // 相对路径转绝对路径
-      const absolutePath = path.isAbsolute(imagePath)
-        ? imagePath
-        : path.resolve(path.dirname(markdownPath), imagePath);
-
-      if (!fs.existsSync(absolutePath)) {
-        console.warn(`  ⚠️ 图片不存在: ${absolutePath}`);
-        continue;
+    // 没有封面图时，生成一个纯色占位图
+    if (!thumbMediaId) {
+      console.log('🖼️ 生成占位封面...');
+      const placeholderPath = path.join(path.dirname(markdownPath), '_placeholder_cover.png');
+      // 生成一个最小的1x1 PNG（微信要求图片）
+      // 用一个简单的纯白 PNG
+      const pngHeader = Buffer.from([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // 1x1
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, // 8bit RGB
+        0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, // IDAT chunk
+        0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, 0x33,
+        0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82 // IEND
+      ]);
+      fs.writeFileSync(placeholderPath, pngHeader);
+      try {
+        thumbMediaId = await this.uploadThumbImage(placeholderPath);
+        console.log(`  占位封面 media_id: ${thumbMediaId}`);
+      } catch (e) {
+        console.warn(`  ⚠️ 封面上传失败: ${e.message}`);
       }
-
-      const mediaId = await this.uploadImage(absolutePath);
-      mediaIds[imagePath] = mediaId;
-
-      // 第一张图作为封面
-      if (i === 0) {
-        thumbMediaId = mediaId;
-      }
+      // 清理
+      if (fs.existsSync(placeholderPath)) fs.unlinkSync(placeholderPath);
     }
 
     console.log('🔄 转换格式...');
-    const html = this.markdownToWechatHTML(markdown, mediaIds);
+    const html = this.markdownToWechatHTML(markdown);
 
-    console.log('✅ 创建草稿...');
-    const draftId = await this.createDraft(title, html, thumbMediaId);
+    console.log('📤 创建草稿...');
+    const draftId = await this.createDraft(title, html, thumbMediaId, digest);
 
-    const draftUrl = `https://mp.weixin.qq.com/cgi-bin/draft?t=draft/list&action=edit&draft_id=${draftId}`;
+    console.log('\n✅ 发布成功！');
+    console.log(`  标题: ${title}`);
+    console.log(`  草稿ID: ${draftId}`);
+    console.log(`  请在公众号后台查看草稿箱`);
 
-    return {
-      success: true,
-      title,
-      draftId,
-      draftUrl,
-      imagesUploaded: Object.keys(mediaIds).length,
-    };
+    return { success: true, title, draftId };
   }
 }
 
 module.exports = WechatPublisher;
 
-// ========== CLI 入口 ==========
+// CLI
 if (require.main === module) {
-  const args = process.argv.slice(2);
-  const markdownPath = args[0];
-  let coverImagePath = null;
-  let useNotebookLM = true;
-
-  // 解析参数
-  for (let i = 1; i < args.length; i++) {
-    if (args[i] === '--no-notebooklm') {
-      useNotebookLM = false;
-    } else if (args[i] === '--canvas-only') {
-      useNotebookLM = false;
-    } else if (!coverImagePath) {
-      coverImagePath = args[i];
-    }
-  }
+  const [, , markdownPath, coverImagePath] = process.argv;
 
   if (!markdownPath) {
-    console.error('用法: node wechat-publisher.js <文章路径> [封面图路径]');
-    console.error('\n示例:');
-    console.error('  node wechat-publisher.js article.md              # 无封面发布');
-    console.error('  node wechat-publisher.js article.md cover.png     # 使用自定义封面');
-    console.error('\n环境变量:');
-    console.error('  WECHAT_APP_ID        微信公众号 AppID');
-    console.error('  WECHAT_APP_SECRET    微信公众号 AppSecret');
-    console.error('\n注意:');
-    console.error('  - Google AI 图片生成需要付费账户，已禁用自动封面生成');
-    console.error('  - 建议手动制作封面图或使用第三方工具');
+    console.error('用法: node wechat-publisher.js <文章.md> [封面图.png]');
     process.exit(1);
   }
 
-  // 从环境变量读取配置
-  const appId = process.env.WECHAT_APP_ID;
-  const appSecret = process.env.WECHAT_APP_SECRET;
-
-  if (!appId || !appSecret) {
-    console.error('❌ 请配置环境变量: WECHAT_APP_ID, WECHAT_APP_SECRET');
-    process.exit(1);
-  }
+  const appId = process.env.WECHAT_APP_ID || DEFAULT_APP_ID;
+  const appSecret = process.env.WECHAT_APP_SECRET || DEFAULT_APP_SECRET;
 
   const publisher = new WechatPublisher(appId, appSecret);
-
-  publisher
-    .publishToDraft(markdownPath, coverImagePath, { useNotebookLM })
-    .then((result) => {
-      console.log('\n🎉 发布成功！\n');
-      console.log('📊 详情:');
-      console.log(`  标题: ${result.title}`);
-      console.log(`  草稿ID: ${result.draftId}`);
-      console.log(`  上传图片: ${result.imagesUploaded}张`);
-      console.log(`\n🔗 草稿链接: ${result.draftUrl}`);
-    })
-    .catch((err) => {
+  publisher.publishToDraft(markdownPath, coverImagePath)
+    .catch(err => {
       console.error('❌ 发布失败:', err.message);
       process.exit(1);
     });
