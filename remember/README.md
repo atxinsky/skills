@@ -1,12 +1,12 @@
 # Remember — Claude Code 本地长期记忆系统
 
-> 纯本地、零 API 开销的跨会话记忆方案。每次开新会话自动回忆历史上下文，会话结束自动保存记忆。
+> 纯本地、零 API 开销的跨会话记忆方案。每次开新会话自动回忆历史上下文，重要会话自动保存记忆。
 
 ## 原理
 
 ```
 会话开始 → SessionStart hook 自动读取记忆 → 注入对话上下文
-会话结束 → Stop hook 提醒 Claude 自动保存记忆（无需手动 /remember）
+完成任务 → rules/auto-remember.md 规则驱动 Claude 自动保存记忆
 手动保存 → /remember skill 可随时手动触发
 ```
 
@@ -18,6 +18,7 @@
 mkdir -p ~/.claude/memory/global
 mkdir -p ~/.claude/hooks
 mkdir -p ~/.claude/skills/remember
+mkdir -p ~/.claude/rules
 ```
 
 ### 2. 复制文件
@@ -26,9 +27,8 @@ mkdir -p ~/.claude/skills/remember
 # 从本仓库复制（假设已 clone 到 ~/skills）
 cp ~/skills/remember/SKILL.md ~/.claude/skills/remember/SKILL.md
 cp ~/skills/remember/hooks/memory-recall.sh ~/.claude/hooks/memory-recall.sh
-cp ~/skills/remember/hooks/memory-auto-save.sh ~/.claude/hooks/memory-auto-save.sh
+cp ~/skills/remember/rules/auto-remember.md ~/.claude/rules/auto-remember.md
 chmod +x ~/.claude/hooks/memory-recall.sh
-chmod +x ~/.claude/hooks/memory-auto-save.sh
 ```
 
 ### 3. 自定义项目映射
@@ -47,38 +47,20 @@ detect_project() {
 }
 ```
 
-### 4. 注册 Hooks 到 settings.json
+### 4. 注册 SessionStart Hook 到 settings.json
 
-编辑 `~/.claude/settings.json`：
+编辑 `~/.claude/settings.json`，在 `hooks.SessionStart` 数组中追加：
 
 ```json
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/absolute/path/to/.claude/hooks/memory-recall.sh",
-            "timeout": 15
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/absolute/path/to/.claude/hooks/memory-auto-save.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ]
-  }
+  "matcher": "",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "/absolute/path/to/.claude/hooks/memory-recall.sh",
+      "timeout": 15
+    }
+  ]
 }
 ```
 
@@ -99,25 +81,38 @@ detect_project() {
 
 | 场景 | 操作 | 说明 |
 |------|------|------|
-| 开新会话 | 自动 | SessionStart hook 自动读取最近 5 条项目记忆 + 3 条全局记忆 |
-| 会话结束 | 自动 | Stop hook 提醒 Claude 自动保存重要记忆 |
+| 开新会话 | 自动 | SessionStart hook 读取最近 5 条项目记忆 + 3 条全局记忆 |
+| 完成任务 | 自动 | `rules/auto-remember.md` 驱动 Claude 自动保存重要记忆 |
 | 手动保存 | `/remember` | 随时手动触发保存当前会话关键信息 |
 | 全局记忆 | `/remember global` | 保存到全局目录（跨项目共享） |
+
+## 自动保存机制
+
+自动保存通过 `~/.claude/rules/auto-remember.md` 规则文件实现（非 hook）。
+Claude 每次会话都会读取此规则，在完成重要任务、会话结束、发现教训时自动执行 `/remember`。
+
+**触发条件**：
+- 修改了代码、做了架构决策、解决了 bug
+- 用户说结束语（"好了"、"就这样"、"谢谢"）
+- 踩坑或发现重要规律
+- 产生未完成的待办事项
+
+**不触发**：简单问答、闲聊、只读操作
 
 ## 目录结构
 
 ```
 ~/.claude/
 ├── hooks/
-│   ├── memory-recall.sh        # SessionStart 自动回忆
-│   └── memory-auto-save.sh     # Stop 自动保存提醒
+│   └── memory-recall.sh        # SessionStart 自动回忆
+├── rules/
+│   └── auto-remember.md        # 自动保存规则（驱动 Claude 行为）
 ├── skills/
 │   └── remember/
-│       └── SKILL.md            # /remember 手动保存
+│       └── SKILL.md            # /remember 手动 & 自动保存
 └── memory/                     # 记忆存储
     ├── global/                 # 跨项目通用记忆
     ├── project-a/              # 项目专属记忆
-    ├── project-b/
     └── ...
 ```
 
@@ -127,4 +122,9 @@ detect_project() {
 - **零 API 开销**：不调用 embedding/VLM，纯本地文件
 - **零配置**：装完即用，项目自动识别
 - **可迁移**：记忆是纯 markdown，可以 git 同步、复制到其他机器
-- **自动化**：会话开始自动回忆，结束自动保存，不需要手动干预
+- **全自动**：开始自动回忆，结束自动保存，不需要手动干预
+
+## 为什么不用 Stop Hook？
+
+Claude Code 的 Stop hook 不支持 `additionalContext` 注入（只有 `SessionStart`/`UserPromptSubmit`/`PostToolUse` 支持）。
+`rules/` 规则文件是更可靠的方案——每次会话都会被读取，无 JSON schema 兼容性问题。
