@@ -20,13 +20,16 @@ argument-hint: [可选：记忆主题/标签]
 
 ## 项目名映射
 
-根据当前工作目录自动判断（与 hooks/memory-recall.sh 中的映射保持一致）。
-如果 $ARGUMENTS 包含 "global" 或 "全局"，存到 `global/` 目录。
-
-**默认映射示例**（安装时按需修改 detect_project 函数）：
-- `project-a` — 项目A
-- `project-b` — 项目B
+根据当前工作目录自动判断：
+- `taijiv3` / `taijiv2` / `taiji` — 太极圈系列
+- `rongyi` — 融易陪伴
+- `banbot` — Banbot 量化
+- `futures` — 期货系统
+- `options` — 期权系统
+- `personality` — 人格光谱
 - `general` — 其他
+
+如果 $ARGUMENTS 包含 "global" 或 "全局"，存到 `global/` 目录。
 
 ## 执行步骤
 
@@ -36,6 +39,7 @@ argument-hint: [可选：记忆主题/标签]
    - **修改文件**：改了哪些文件、为什么改
    - **发现/教训**：踩了什么坑、发现了什么规律
    - **待办**：未完成的事项
+   - **重要数据**：API key 配置、端口、密码等运维信息（注意：不保存明文密钥）
 3. **写入文件**：用 Write 工具写入
 
 ## 记忆文件格式
@@ -48,6 +52,7 @@ argument-hint: [可选：记忆主题/标签]
 
 ## 关键决策
 - {决策1}
+- {决策2}
 
 ## 修改文件
 - `{文件路径}` — {改动说明}
@@ -65,7 +70,7 @@ argument-hint: [可选：记忆主题/标签]
 
 slug 从标题或 $ARGUMENTS 生成，用英文小写+连字符，如：
 - `2026-02-19_font-upgrade.md`
-- `2026-02-19_api-refactor.md`
+- `2026-02-19_trading-insight.md`
 
 ## 重要
 
