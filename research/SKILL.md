@@ -276,7 +276,7 @@ description: 深度研究分析skill，用于股票、加密货币和商品期�
 在输出研究报告时，**必须同时使用Write工具**将完整的Markdown内容写入临时文件：
 
 ```
-文件路径：C:\Users\atxin\temp_research_report.md
+文件路径：~/temp_research_report.md（即用户 home 目录下）
 ```
 
 **重要**：
@@ -291,14 +291,14 @@ description: 深度研究分析skill，用于股票、加密货币和商品期�
 
 ```bash
 # 使用 NOTION_API_KEY 环境变量，无需 --api-key 参数
-python "C:\Users\atxin\.claude\skills\notion-save-skill\scripts\save_to_notion.py" --title "【研究】{标的} - {日期}" --file "C:\Users\atxin\temp_research_report.md"
+python ~/.claude/skills/notion-save-skill/scripts/save_to_notion.py --title "【研究】{标的} - {日期}" --file ~/temp_research_report.md
 ```
 
 ### 步骤3：清理
 
 上传成功后删除临时文件：
 ```bash
-rm "C:\Users\atxin\temp_research_report.md"
+rm ~/temp_research_report.md
 ```
 
 ### 常见错误（必须避免）
