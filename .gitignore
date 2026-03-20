@@ -37,3 +37,6 @@ Thumbs.db
 # Temporary
 tmp/
 temp/
+
+# Third-party skills
+gstack/

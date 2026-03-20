@@ -6,7 +6,7 @@ Sync GitHub starred repos to a Notion database. Fetches all starred repos, class
 
 ## Trigger
 
-When the user says "同步stars", "stars to notion", "github stars整理", or "/github-stars-to-notion".
+When the user says "同步stars", "stars to notion", "github stars整理", "更新stars数量", "更新github stars", or "/github-stars-to-notion".
 
 ## Configuration
 
@@ -69,7 +69,8 @@ Use `mcp__claude_ai_Notion__notion-create-pages` with:
       "properties": {
         "Name": "[**{repo_name}**]({github_url})",
         "about": "{description, max 200 chars}",
-        "type": "{category}"
+        "type": "{category}",
+        "Stars": {stargazers_count}
       },
       "content": "## {repo_name}\n\n**Stars:** {stars} | **Language:** {language}\n\n### 简介\n\n{description}\n\n[GitHub 仓库]({github_url})"
     }
@@ -78,6 +79,17 @@ Use `mcp__claude_ai_Notion__notion-create-pages` with:
 ```
 
 Batch 10 pages per API call. Use background agents for parallel processing if >30 repos.
+
+### Step 6: Update Stars for Existing Entries
+
+Periodically refresh star counts for all existing entries:
+
+1. Fetch parent page `2e6cc7dd34048086af72ce0ad1a7e00d` to get all `<mention-page>` entries
+2. For each page, fetch it to extract GitHub URL from the Name property: `[**name**](https://github.com/owner/repo)`
+3. Call GitHub API: `gh api repos/{owner}/{repo} --jq '.stargazers_count'`
+4. Update the page: `mcp__claude_ai_Notion__notion-update-page` with `{"page_id": "...", "command": "update_properties", "properties": {"Stars": <number>}}`
+
+Process pages in parallel batches of 5-8. Skip pages without a valid GitHub URL in the Name field.
 
 ### Step 5: Update Directory
 
@@ -91,6 +103,7 @@ CREATE TABLE "collection://325cc7dd-3404-80d8-874a-000b767ae11e" (
   createdTime TEXT,
   "type" TEXT,     -- category string
   "about" TEXT,    -- repo description
+  "Stars" FLOAT,   -- GitHub stargazers_count (number)
   "Name" TEXT      -- markdown link: [**name**](url)
 )
 ```
